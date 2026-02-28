@@ -11,7 +11,7 @@ export function createSelectionRenderer(viewport,overlayLayer){
     // handles
     const handles = [];
     const handleR = 8;
-
+    //绘制放缩控点
     for (let i = 0; i < 4; i++) {
         const h = new PIXI.Graphics();
 
@@ -21,19 +21,19 @@ export function createSelectionRenderer(viewport,overlayLayer){
         h.drawCircle(0, 0, handleR);
         h.endFill();
 
-        // 必须：可交互
+        // 确保可交互
         h.eventMode = "static";
         h.cursor = "nwse-resize";
         h._type = "resize";
 
-        // 必须：扩大点击范围
+        // 扩大点击范围
         h.hitArea = new PIXI.Circle(0, 0, handleR + 10);
 
         overlay.addChild(h);
         handles.push(h);
     }
 
-    // rotate handle
+    // 绘制旋转控点
     const rotateHandle = new PIXI.Graphics();
     rotateHandle.beginFill(0xffffff, 1);
     rotateHandle.lineStyle(1, 0xE90157, 1);
@@ -94,19 +94,18 @@ export function createSelectionRenderer(viewport,overlayLayer){
         handles[1].position.set(p2.x, p2.y)
         handles[2].position.set(p4.x, p4.y)
         handles[3].position.set(p3.x, p3.y)
-        // 旋转控点：用 localBounds + 像素距离恒定
+        // 旋转控点：用 localBounds（不受缩放影响的原始尺寸） + 像素距离恒定
         const localB = target.getLocalBounds()
 
-        const px = 30
-        const offset = px / viewport.scale.x  // 把 30px 换算成 local/world 距离
+        const px = 20
+        const offset = px / viewport.scale.x  // 把 20px 换算成 local/world 距离
 
         // 目标 local 的“顶部中心”再往上 offset
         const localTop = new PIXI.Point(
         localB.x + localB.width / 2,
         localB.y - offset
         )
-
-        // local -> global -> overlay local
+        // 坐标转换：图形local -> 屏幕global -> overlay local
         const globalTop = target.toGlobal(localTop)
         const p = overlay.toLocal(globalTop)
 

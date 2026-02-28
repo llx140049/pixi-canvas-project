@@ -1,5 +1,5 @@
 <template>
-    
+
 
     <div class="canvas-page">
         <div ref="canvasContainer" class="canvas-wrap"></div>
@@ -54,13 +54,14 @@
                 title="导入图片">
                 <i class="iconfont1 icon-tupian1"></i>
             </div>
+            <!--文件选择器-->
             <input
                 ref="imgInput"
                 type="file"
                 accept="image/*"
                 style="display: none"
                 @change="onPickImage"
-            >
+            ><!--确认选择后触发事件-->
 
             <div class="tool-divider"></div>
 
@@ -88,24 +89,27 @@
 </template>
 
 <script setup>
-    import * as PIXI from 'pixi.js'//PixiCanvas.vue 只是在“编排/组装”这些模块，不需要自己直接引用 PIXI
-    import {ref,onMounted,onBeforeUnmount, watch, computed} from 'vue'
-    import {usePixiApp} from '../composables/usePixiApp'
-    import {useShapeManager} from '../composables/useShapeManager'
-    import {createSelectionRenderer} from '../services/SelectionRenderer'
+    import * as PIXI from 'pixi.js'
+    import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
+    import { usePixiApp } from '../composables/usePixiApp'
+    import { useShapeManager } from '../composables/useShapeManager'
+    import { createSelectionRenderer } from '../services/SelectionRenderer'
     import { useInteraction } from '../composables/useInteraction'
     import { useHistory } from '../composables/useHistory'
-    import {exportPNG, exportShapesJSON} from '../services/ExportService'
+    import { exportPNG, exportShapesJSON } from '../services/ExportService'
 
-    
-    const canvasContainer=ref(null)//画布容器引用
-    const activeTool=ref('select')//select|circle|rect|pan|text|triangle
+    //状态与引用
+    const canvasContainer = ref(null) // 画布容器引用
+    const activeTool = ref('select') // select|circle|rect|pan|text|triangle
+    const imgInput = ref(null) // 图片输入元素引用
+    const shapeMenuOpen = ref(false) // 图形工具菜单是否打开
 
-    const imgInput=ref(null)//图片输入元素引用
-
-    const shapeMenuOpen=ref(false)//图形工具菜单是否打开
-    //计算属性，判断当前是否为图形工具(computed在检测的对象变化时才重新计算)
-    const isShapeTool=computed(()=>activeTool.value==='rect'||activeTool.value==='circle'||activeTool.value==='triangle')
+    // 计算属性：判断当前是否为图形工具
+    const isShapeTool = computed(() => 
+        activeTool.value === 'rect' || 
+        activeTool.value === 'circle' || 
+        activeTool.value === 'triangle'
+    )
 
     // 统一的 pixi 上下文对象
     const pixi = {
@@ -115,94 +119,23 @@
         tempLayer: null,
         overlayLayer: null,
     }
+
     let selectionRenderer = null
     let shapeManager = null
     let history = null
     let cleanup = null
 
-    //撤销/重做方法
-    function onUndo() {
-        history?.undo?.()
-    }
-    function onRedo() {
-        history?.redo?.()
-    }
-
-    //选择图形工具
-    function selectShapeTool(type){
-        activeTool.value=type
-        shapeMenuOpen.value=false
-    }
-    //触发图片选择器点击事件
-    function triggerImagePick(){
-        imgInput.value?.click()
-    }
-    //选择图片后插入到画布
-    async function onPickImage(e) {
-        const file = e.target.files?.[0]
-    
-        e.target.value = ''
-
-        history?.save?.()
-
-        const url = URL.createObjectURL(file)
-
-        // 插入世界中心（world 坐标）
-        if (!pixi.viewport) {
-            console.error('[onPickImage] pixi not ready')
-            return
-        }
-
-        
-        const worldCenter = pixi.viewport.toLocal({ x:0, y:0 })
-                
-        // 创建 sprite（addImage 是 async）
-        const sprite = await shapeManager.addImage({
-            centerX: worldCenter.x,
-            centerY: worldCenter.y,
-            url,
-            scaleX: 1,
-            scaleY: 1,
-            rotation: 0,
-        })
-
-        // 限制图片大小（最大 300px）
-        const maxSize = 300
-        const texture = sprite.texture
-        const w = texture.width
-        const h = texture.height
-        const scale = Math.min(1, maxSize / Math.max(w, h))
-        sprite.scale.set(scale, scale)
-
-        // 同步更新 shapeManager 中的数据
-        shapeManager.syncDataFromGraphic(sprite)
-
-        selectionRenderer?.show(sprite)
-
-        // 自动切换到选择模式
-        activeTool.value = 'select'
-    }
-
-    function setTool(tool){
-        activeTool.value=tool
-    }
-    function clearAll(){
-        history?.save()
-        shapeManager?.removeAllShapes()//调用形状管理器的移除所有形状方法
-        
-    }
-
-    onMounted(()=>{//在组件挂载时执行
-        const{
+    //组件挂载时，初始化 pixi 上下文对象
+    onMounted(() => {
+        const {
             app,
             viewport,
             shapesLayer,
             tempLayer,
             overlayLayer,
             destroy
-        }=usePixiApp(canvasContainer)
-        //对象解构赋值 ：把 usePixiApp 返回对象里的同名字段直接取出来，变成本地变量
-        
+        } = usePixiApp(canvasContainer)
+
         // 统一赋值给 pixi 上下文对象
         pixi.app = app
         pixi.viewport = viewport
@@ -210,12 +143,11 @@
         pixi.tempLayer = tempLayer
         pixi.overlayLayer = overlayLayer
 
-        shapeManager = useShapeManager(shapesLayer)//创建形状管理器实例
+        shapeManager = useShapeManager(shapesLayer)
         selectionRenderer = createSelectionRenderer(viewport, overlayLayer)
-        
         history = useHistory(shapeManager)
-        
-        //返回清理函数，用于在组件卸载时执行清理操作
+
+        // 初始化交互逻辑
         cleanup = useInteraction({
             app,
             viewport,
@@ -227,41 +159,99 @@
             activeTool,
             history
         })
-        cleanup._destroyPixi = destroy//将Pixi应用程序的销毁函数赋值给清理函数的_destroyPixi方法
+        cleanup._destroyPixi = destroy
     })
-    
-    //下载JSON文件
-    function downloadJSON(){
-        if(!shapeManager)return
-        exportShapesJSON(shapeManager.shapes)
-    }
-    //下载PNG图片
-    function downloadPNG(){
-        if(!pixi.app || !pixi.viewport){
-            console.error('[downloadPNG] pixi not ready')
-            return
-        }
-        const worldRect={x:-2500,y:-2500,width:5000,height:5000}
-        exportPNG(pixi.app, pixi.viewport, worldRect)
-    }
-    
-
-    //监听activeTool变化，更新鼠标光标
-    watch(activeTool,(tool)=>{
-        const el=pixi.app?.view
-        if(!el) return
-        if(tool==='pan')el.style.cursor='grab'
-        else if(tool==='select')el.style.cursor='default'
-        else el.style.cursor='crosshair'
-    })
-
-   
-
-    //在组件卸载时执行
-    onBeforeUnmount(()=>{
+    // 组件卸载时，清理 pixi 上下文对象
+    onBeforeUnmount(() => {
         cleanup?.()
         cleanup?._destroyPixi?.()
     })
+
+    // 监听 activeTool 变化，更新鼠标光标
+    watch(activeTool, (tool) => {
+        const el = pixi.app?.view
+        if (!el) return
+        if (tool === 'pan') el.style.cursor = 'grab'
+        else if (tool === 'select') el.style.cursor = 'default'
+        else el.style.cursor = 'crosshair'
+    })
+
+    // 工具切换逻辑
+    function setTool(tool) {
+        activeTool.value = tool
+    }
+
+    function selectShapeTool(type) {
+        activeTool.value = type
+        shapeMenuOpen.value = false
+    }
+
+    // 图片处理逻辑
+    function triggerImagePick() {
+        imgInput.value?.click()
+    }
+    // 处理图片选择事件
+    async function onPickImage(e) {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        e.target.value = ''
+        history?.save?.()
+        const url = URL.createObjectURL(file)
+
+        if (!pixi.viewport) {
+            console.error('[onPickImage] pixi not ready')
+            return
+        }
+
+        const worldCenter = pixi.viewport.toLocal({ x: pixi.app.screen.width/2, y: pixi.app.screen.height/2 })
+
+        const sprite = await shapeManager.addImage({
+            centerX: worldCenter.x,
+            centerY: worldCenter.y,
+            url,
+            scaleX: 1,
+            scaleY: 1,
+            rotation: 0,
+        })
+
+        const maxSize = 300
+        const texture = sprite.texture
+        const scale = Math.min(1, maxSize / Math.max(texture.width, texture.height))
+        sprite.scale.set(scale, scale)
+
+        shapeManager.syncDataFromGraphic(sprite)
+        selectionRenderer?.show(sprite)
+        activeTool.value = 'select'
+    }
+
+    // 历史记录 (撤销/重做)
+    function onUndo() {
+        history?.undo?.()
+    }
+    function onRedo() {
+        history?.redo?.()
+    }
+
+    // 全局操作与导出
+    function clearAll() {
+        history?.save()
+        shapeManager?.removeAllShapes()
+    }
+
+    function downloadJSON() {
+        if (!shapeManager) return
+        exportShapesJSON(shapeManager.shapes)
+    }
+
+    function downloadPNG() {
+        if (!pixi.app || !pixi.viewport) {
+            console.error('[downloadPNG] pixi not ready')
+            return
+        }
+        const worldRect = { x: -2500, y: -2500, width: 5000, height: 5000 }
+        exportPNG(pixi.app, pixi.viewport, worldRect)
+    }
 </script>
 <style scoped>
 /* 页面容器 */

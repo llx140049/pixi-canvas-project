@@ -4,7 +4,7 @@ export function useShapeManager(container) {
   const shapes = []; // {id,type,data,graphic}
 
   function addCircle(m) {
-    const id = Date.now() + Math.random();
+    const id = Date.now();
     const data = {
       x: m.x,
       y: m.y,
@@ -20,7 +20,7 @@ export function useShapeManager(container) {
   }
 
   function addRect(m) {
-    const id = Date.now() + Math.random();
+    const id = Date.now();
     const data = {
       centerX: m.centerX,
       centerY: m.centerY,
@@ -37,7 +37,7 @@ export function useShapeManager(container) {
   }
 
   function addTriangle(m) {
-    const id = Date.now() + Math.random();
+    const id = Date.now();
     const data = {
       centerX: m.centerX,
       centerY: m.centerY,
@@ -54,11 +54,11 @@ export function useShapeManager(container) {
   }
 
   function addText(m) {
-    const id = Date.now() + Math.random();
+    const id = Date.now();
     const data = {
       centerX: m.centerX,
       centerY: m.centerY,
-      text: m.text ?? "点选择进行编辑",
+      text: m.text ?? "双击编辑",
       fontSize: m.fontSize ?? 24,
       fill: m.fill ?? 0x000000,
       bold: !!m.bold,
@@ -72,7 +72,7 @@ export function useShapeManager(container) {
 
   // 注意：drawImage 是 async
   async function addImage(m) {
-    const id = Date.now() + Math.random();
+    const id = Date.now();
     const data = {
       centerX: m.centerX,
       centerY: m.centerY,
@@ -116,6 +116,7 @@ export function useShapeManager(container) {
       s.data.centerX = graphic.x;
       s.data.centerY = graphic.y;
       s.data.text = graphic.text;
+      s.data.fontSize = graphic.style.fontSize; // 同步新的字体大小
     } else if (s.type === "image") {
       s.data.centerX = graphic.x;
       s.data.centerY = graphic.y;

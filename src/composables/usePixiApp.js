@@ -1,7 +1,7 @@
 import*as PIXI from 'pixi.js'
 //创建Pixi应用程序,并将其视图添加到容器中
 export function usePixiApp(canvasContainerRef){
-        
+
     const app=new PIXI.Application({
 
         resizeTo:canvasContainerRef.value,//应用程序的视图将自动调整大小以适应容器
@@ -14,7 +14,7 @@ export function usePixiApp(canvasContainerRef){
     const viewport=new PIXI.Container()
     app.stage.addChild(viewport)
 
-    //将视口中心设置为应用程序中心
+    //将视口中心设置为应用程序中心，图片插入时等用到
     viewport.position.set(app.screen.width/2,app.screen.height/2)
     //将应用程序的视图添加到容器中
     canvasContainerRef.value.appendChild(app.view)

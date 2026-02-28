@@ -1,8 +1,9 @@
 import * as PIXI from "pixi.js";
 
 export function useInteraction({
-
-  app,
+	//通过 { app, viewport, ... } 这种写法，函数内部可以直接使用 app 、 viewport 等变量，
+	// 而不需要写成 props.app 或 props.viewport 。
+	app,
 	viewport,
 	shapesLayer,
 	tempLayer,
@@ -10,7 +11,8 @@ export function useInteraction({
 	shapeManager,
 	activeTool,
 	history, // 可选：有就 save()
-}) {
+}) 
+{
 	const state = {
 		mode: "idle", // idle | drawing | dragging | panning | resizing | rotating
 		drawType: null,
@@ -26,22 +28,23 @@ export function useInteraction({
 		startScaleY: null,
 		startAngle: null,
 		startRotation: null,
+		startFontSize: null,
 	};
 
-	  // 双击检测
-	  let lastTapTime = 0;
-	  let lastTapTarget = null;
+	// 双击检测
+	let lastTapTime = 0;
+	let lastTapTarget = null;
 
-	  function isDoubleTap(target) {
-		    const now = performance.now();
-		    const ok = (now - lastTapTime) < 280 && target === lastTapTarget;
-		    lastTapTime = now;
-	  	  lastTapTarget = target;
-  	  	return ok;
-	  }
+	function isDoubleTap(target) {
+			const now = performance.now();
+			const ok = (now - lastTapTime) < 280 && target === lastTapTarget;
+			lastTapTime = now;
+		lastTapTarget = target;
+		return ok;
+	}
 
-	    app.stage.eventMode = "static";
-	    app.stage.hitArea = app.screen;
+	app.stage.eventMode = "static";
+	app.stage.hitArea = app.screen;
 
     // 把 Pixi 事件的坐标，转成视口内的世界坐标
     function worldPointFromPixiEvent(e) {
@@ -70,6 +73,7 @@ export function useInteraction({
 		state.tempGraphic = null;
 	}
 
+	// 重置状态
 	function reset() {
 		state.mode = "idle";
 		state.drawType = null;
@@ -83,13 +87,14 @@ export function useInteraction({
 		state.startScaleY = null;
 		state.startAngle = null;
 		state.startRotation = null;
+		state.startFontSize = null;
 		clearTemp();
 	}
 
 	// 捕获鼠标事件（防止甩出画布时丢失）
 	let captureOn = false;
 
-	// 把 DOM 事件的坐标，转成 Pixi 的 screen 坐标
+	// 把DOM坐标转成 Pixi 的 screen 坐标
 	function domToPixiGlobal(ev) {
 		const view = app.view;
 		const rect = view.getBoundingClientRect();
@@ -108,12 +113,14 @@ export function useInteraction({
 	// 捕获鼠标移动事件
 	function onCaptureMove(ev) {
 		const global = domToPixiGlobal(ev);
+		// 继续触发 Pixi 的 pointermove 事件
 		app.stage.emit("pointermove", { global, pointerId: ev.pointerId });
 	}
 
 	// 捕获鼠标松开事件 
 	function onCaptureUp(ev) {
 		const global = domToPixiGlobal(ev);
+		// 触发 Pixi 的 pointerup 事件	
 		app.stage.emit("pointerup", { global, pointerId: ev.pointerId });
 		stopCapture();
 	}
@@ -122,8 +129,10 @@ export function useInteraction({
 
 		if (captureOn) return;
 		captureOn = true;
+		// 捕获鼠标移动事件和松开事件
 		window.addEventListener("pointermove", onCaptureMove);
 		window.addEventListener("pointerup", onCaptureUp, { once: true });
+		//在stopCapture中移除事件监听器
 	}
 
 	function stopCapture() {
@@ -133,15 +142,16 @@ export function useInteraction({
 		window.removeEventListener("pointerup", onCaptureUp);
 	}
 
+	//将临时转正
 	function finishDraw() {
 		if (state.mode !== "drawing" || !state.tempGraphic?._meta) {
 			reset();
 			return;
 		}
-
 		history?.save?.();
-
+		//获取绘制时产生的临时数据
 		const m = state.tempGraphic._meta;
+		//正式添加到shapesLayer
 		if (m.type === "circle") shapeManager.addCircle(m);
 		if (m.type === "rect") shapeManager.addRect(m);
 		if (m.type === "triangle") shapeManager.addTriangle(m);
@@ -150,6 +160,12 @@ export function useInteraction({
 	}
 
 	app.stage.on("pointerdown", async (e) => {
+		// 0) 异常状态恢复：如果已经是 drawing 模式（比如之前甩出画布导致没 finish），先结束它
+		if (state.mode === "drawing") {
+			finishDraw();//回来后按下鼠标结束当前绘制，把临时图形转为正式图形
+			return;
+		}
+
 		const tool = activeTool.value;
 		const p = worldPointFromPixiEvent(e);
 
@@ -164,9 +180,15 @@ export function useInteraction({
 			// 记录起点（world）
 			if (e.target._type === "resize") {
 				state.mode = "resizing";
+				// 记录初始距离（控点到目标的距离）和缩放比例
 				state.startDistance = Math.hypot(p.x - target.x, p.y - target.y);
-				state.startScaleX = target.scale.x;
-				state.startScaleY = target.scale.y;
+				// 记录按下那一刻图形的 原始缩放值 ，作为基准
+				if (target._shapeType === "text") {
+					state.startFontSize = target.style.fontSize;
+				} else {
+					state.startScaleX = target.scale.x;
+					state.startScaleY = target.scale.y;
+				}
 			} else if (e.target._type === "rotate") {
 				state.mode = "rotating";
 				state.startAngle = Math.atan2(p.y - target.y, p.x - target.x);
@@ -189,26 +211,13 @@ export function useInteraction({
 				return;
 			}
 
-			// 双击文字：prompt 编辑
-			if (hit._shapeType === "text" && isDoubleTap(hit)) {
-				const oldText = hit.text ?? "";
-				const newText = window.prompt("编辑文字", oldText);
-
-				if (newText !== null) {
-					history?.save?.();
-					hit.text = newText;
-					shapeManager.syncDataFromGraphic(hit);
-					selectionRenderer?.update?.(hit);
-				}
-				return;
-			}
-
 			history?.save?.();
 
 			state.mode = "dragging";
 			state.selected = hit;
 			state.dragOffset = { x: hit.x - p.x, y: hit.y - p.y };
 			selectionRenderer?.show?.(hit);
+			startCapture(); // 开启全局捕获
 			return;
 		}
 
@@ -218,6 +227,7 @@ export function useInteraction({
 			state.mode = "panning";
 			state.panStart = { x: e.global.x, y: e.global.y };
 			state.viewportStart = { x: viewport.x, y: viewport.y };
+			startCapture();
 			return;
 		}
 
@@ -227,12 +237,13 @@ export function useInteraction({
 			const text = shapeManager.addText({
 				centerX: p.x,
 				centerY: p.y,
-				text: "点选择进行编辑",
+				text: "双击编辑",
 				fontSize: 24,
 				fill: 0x000000,
 			});
 			selectionRenderer?.show?.(text);
 			reset();
+			activeTool.value = "select";
 			return;
 		}
 
@@ -243,6 +254,7 @@ export function useInteraction({
 			state.drawType = tool;
 			state.startPoint = p;
 			beginTemp();
+			startCapture(); // 开启全局捕获，保证图形在绘制过程中鼠标移出画布也能响应
 			return;
 		}
 	});
@@ -257,7 +269,7 @@ export function useInteraction({
 			const dy = p.y - state.startPoint.y;
 
 			state.tempGraphic.clear();
-			state.tempGraphic.lineStyle(2 / viewport.scale.x, 0xE90157, 1);
+			state.tempGraphic.lineStyle(2/viewport.scale.x, 0xE90157, 1);
 
 			if (state.drawType === "circle") {
 				const radius = Math.sqrt(dx * dx + dy * dy);
@@ -276,12 +288,14 @@ export function useInteraction({
 				const y1 = state.startPoint.y;
 				const x2 = p.x;
 				const y2 = p.y;
+				//计算出拉出来的这块区域的“中心点”
 				const centerX = (x1 + x2) / 2;
 				const centerY = (y1 + y2) / 2;
 				const width = Math.abs(x2 - x1);
 				const height = Math.abs(y2 - y1);
-
+				//以中心点为基准，向四周画出矩形
 				state.tempGraphic.drawRect(-width / 2, -height / 2, width, height);
+				//把图形放在中心点syncDataFromGraphic
 				state.tempGraphic.position.set(centerX, centerY);
 				state.tempGraphic._meta = {
 					type: "rect",
@@ -342,7 +356,14 @@ export function useInteraction({
 			const d = Math.hypot(p.x - t.x, p.y - t.y);
 			const ratio = Math.max(0.1, d / state.startDistance);
 
-			t.scale.set(state.startScaleX * ratio, state.startScaleY * ratio);
+			if (t._shapeType === "text") {
+				// 文字不拉伸 scale，而是动态调整 fontSize 重新栅格化
+				const size = Math.max(1, state.startFontSize * ratio);
+				t.style.fontSize = size;
+				t.scale.set(1);
+			} else {
+				t.scale.set(state.startScaleX * ratio, state.startScaleY * ratio);
+			}
 			selectionRenderer?.update?.(t);
 			return;
 		}
@@ -361,6 +382,7 @@ export function useInteraction({
 	app.stage.on("pointerup", () => {
 		if (state.mode === "drawing") {
 			finishDraw();
+			stopCapture(); // 结束绘制后停止捕获
 			return;
 		}
 
@@ -372,6 +394,7 @@ export function useInteraction({
 		}
 
 		if (state.mode === "panning") {
+			stopCapture();
 			reset();
 		}
 	});
@@ -380,18 +403,20 @@ export function useInteraction({
 	app.stage.on("pointertap", (e) => {
 		const hit = findShapeTarget(e.target);
 		if (!hit || hit._shapeType !== "text") return;
-		if (e.detail !== 2) return;
+		if (!isDoubleTap(hit)) return;
 
 		const oldText = hit.text;
 		const newText = window.prompt("编辑文字", oldText);
 		if (newText === null) return;
+		history?.save?.();// 保存历史记录
 
-		history?.save?.();
+		// 更新文字内容
 		hit.text = newText;
 		shapeManager.syncDataFromGraphic(hit);
 		selectionRenderer?.show?.(hit);
 	});
 
+	
 	// 清理事件监听
 	return function cleanup() {
 		app.stage.removeAllListeners();

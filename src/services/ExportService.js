@@ -37,7 +37,7 @@ export async function exportPNG(app,viewport,worldRect){
     console.error('[exportPNG] invalid args')
     return
   }
-    // 渲染应用到 RenderTexture
+    // 创建临时纹理，用于渲染
     const rt=PIXI.RenderTexture.create({
         width:worldRect.width,
         height:worldRect.height,//
@@ -49,7 +49,7 @@ export async function exportPNG(app,viewport,worldRect){
     const oldScale=viewport.scale.clone()
     const oldRot=viewport.rotation
 
-    //重置transform
+    //重置transform，确保画布是正的（不被缩放、旋转、轴心点影响）
     viewport.position.set(-worldRect.x,-worldRect.y)
     viewport.scale.set(1,1)
     viewport.rotation=0
@@ -62,10 +62,10 @@ export async function exportPNG(app,viewport,worldRect){
     viewport.scale.copyFrom(oldScale)
     viewport.rotation=oldRot
 
-    //导出为base64
+    //从纹理中提取出 HTML5 Canvas图像
     const canvas=app.renderer.extract.canvas(rt)
     rt.destroy(true)//销毁 RenderTexture
-
+	//把 Canvas 图像转换为 Blob 数据
     canvas.toBlob(blob=>{
         if(!blob)return
         downloadBlob(blob,'canvas.png')
